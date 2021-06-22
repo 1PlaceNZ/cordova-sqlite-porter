@@ -135,7 +135,14 @@
      *  </li>
      *  <li>{boolean} dataOnly - if true, only row data will be exported. Otherwise, table structure will also be exported. Defaults to false.</li>
      *  <li>{boolean} structureOnly - if true, only table structure will be exported. Otherwise, row will also be exported. Defaults to false.</li>
-     *  <li>{array} tables - list of table names to export. If not specified, all tables will be exported.
+     *  <li>{array} tables - list of table names to export. If not specified, all tables will be exported.</li>
+     *  <li>{function} filterFn - filter function to execute for every row when exporting the table row, with arguments:
+     *      <ul>
+     *          <li>{string} tableName - current table the export is running against.</li>
+     *          <li>{object} row - current table row that is currently been exported. (what is returned by sqlite resultset. e.g resultSet.rows.item(i))</li>
+     *      <ul>
+     *  </li>
+     * </ul> 
      */
     sqlitePorter.exportDbToSql = function (db, opts){
         opts = opts || {};
@@ -146,29 +153,77 @@
         var exportTables = function (tables) {
             if (tables.n < tables.sqlTables.length && !opts.structureOnly) {
                 db.transaction(
-                    function (tx) {
-                        var tableName = sqlUnescape(tables.sqlTables[tables.n]),
-                            sqlStatement = "SELECT * FROM " + sqlEscape(tableName);
-                        tx.executeSql(sqlStatement, [],
-                            function (tx, rslt) {
-                                if (rslt.rows) {
-                                    for (var m = 0; m < rslt.rows.length; m++) {
-                                        var dataRow = rslt.rows.item(m);
-                                        var _fields = [];
-                                        var _values = [];
-                                        for (col in dataRow) {
-                                            _fields.push(sqlEscape(col));
-                                            _values.push(dataRow[col] === null ? "NULL" : "'" + sanitiseForSql(dataRow[col]) + "'");
+                    function (transaction) {
+                        var tableName = sqlUnescape(tables.sqlTables[tables.n]);
+                        var sqlQuery = "SELECT sql FROM sqlite_master WHERE sql LIKE '%blob%' and tbl_name = '" +sqlEscape(tableName) +"'";
+                        
+                        transaction.executeSql(sqlQuery, [],
+                            function (transaction, results) {
+                                var tableName = sqlUnescape(tables.sqlTables[tables.n]), 
+                                    sqlStatement = "SELECT * FROM " + sqlEscape(tableName),
+                                    blobColumn = [];
+
+                                if (results.rows && results.rows.length == 1) {
+                                    var sql = results.rows.item(0).sql;
+                                    var start = sql.indexOf("(") +1;
+                                    var end = sql.indexOf(")");
+                                    var columns = sql.substring(start, end).split(",");
+                                    sqlStatement = "SELECT ";
+                                    for (var i = 0; i < columns.length; i++) {
+                                        var _colName = columns[i].trim();
+                                        var _fieldDetails = _colName.split(" ");
+                                        if (_fieldDetails[1].includes("BLOB")) {
+                                            sqlStatement += 'HEX(' + _fieldDetails[0] + ") as " + _fieldDetails[0] + ", ";
+                                            blobColumn.push(_fieldDetails[0]);
+                                        } else{
+                                            sqlStatement += _fieldDetails[0] + ", ";
                                         }
-                                        exportSQL += "INSERT OR REPLACE INTO " + sqlEscape(tableName) + "(" + _fields.join(",") + ") VALUES (" + _values.join(",") + ")" + separator;
-                                        statementCount++;
                                     }
+                                    sqlStatement = sqlStatement.substring(0, sqlStatement.length -2);
+                                    sqlStatement += " FROM " + sqlEscape(tableName);
                                 }
-                                tables.n++;
-                                exportTables(tables);
+                                console.log('sql statement ' + sqlStatement);
+                                transaction.executeSql(sqlStatement, [],
+                                    function (transaction, rslt) {
+                                        if (rslt.rows) {
+                                            for (var m = 0; m < rslt.rows.length; m++) {
+                                                var dataRow = rslt.rows.item(m);
+                                                var _fields = [];
+                                                var _values = [];
+                                                for (col in dataRow) {
+                                                    _fields.push(sqlEscape(col));
+                                                    if (blobColumn.includes(col)) {
+                                                        _values.push(dataRow[col] === null ? "NULL" : "cast(X'" + dataRow[col] + "' as TEXT)");
+                                                    } else {
+                                                        _values.push(dataRow[col] === null ? "NULL" : "'" + sanitiseForSql(dataRow[col]) + "'");
+                                                    }
+                                                }
+                                                if(opts.filterFn){
+                                                    if (opts.filterFn(tableName, dataRow)) {
+                                                        exportSQL += "INSERT OR REPLACE INTO " + sqlEscape(tableName) + "(" + _fields.join(",") + ") VALUES (" + _values.join(",") + ")" + separator;
+                                                        statementCount++;
+                                                    }
+                                                } else{ 
+                                                    exportSQL += "INSERT OR REPLACE INTO " + sqlEscape(tableName) + "(" + _fields.join(",") + ") VALUES (" + _values.join(",") + ")" + separator;
+                                                    statementCount++;
+                                                }
+                                            }
+                                        }
+                                        tables.n++;
+                                        exportTables(tables);
+                                    }
+                                );
+                                
+                            },
+                            function (error) {
+                                console.log(error)
                             }
                         );
+                    },
+                    function (error) {
+                        console.log(error)
                     });
+
             }else if(opts.successFn){
                 opts.successFn(exportSQL, statementCount);
             }
@@ -245,7 +300,13 @@
      *  </li>
      *  <li>{boolean} dataOnly - if true, only row data will be exported. Otherwise, table structure will also be exported. Defaults to false.</li>
      *  <li>{boolean} structureOnly - if true, only table structure will be exported. Otherwise, row will also be exported. Defaults to false.</li>
-     *  <li>{array} tables - list of table names to export. If not specified, all tables will be exported.
+     *  <li>{array} tables - list of table names to export. If not specified, all tables will be exported.</li>
+     *  <li>{function} filterFn - filter function to execute for every row when exporting the table row, with arguments:
+     *      <ul>
+     *          <li>{string} tableName - current table the export is running against.</li>
+     *          <li>{object} row - current table row that is currently been exported.</li>
+     *      <ul>
+     *  </li>
      */
     sqlitePorter.exportDbToJson = function (db, opts){
         opts = opts || {};
@@ -256,28 +317,76 @@
         var exportTables = function (tables) {
             if (tables.n < tables.sqlTables.length && !opts.structureOnly) {
                 db.transaction(
-                    function (tx) {
-                        var tableName = sqlUnescape(tables.sqlTables[tables.n]),
-                            sqlStatement = "SELECT * FROM " + sqlEscape(tableName);
-                        tx.executeSql(sqlStatement, [],
-                            function (tx, rslt) {
-                                if (rslt.rows && !isReservedTable(tableName)) {
-                                    json.data.inserts[tableName] = [];
-                                    for (var m = 0; m < rslt.rows.length; m++) {
-                                        var dataRow = rslt.rows.item(m);
-                                        var _row = {};
-                                        for (col in dataRow) {
-                                            _row[col] = dataRowToJsonData(dataRow[col]);
+                    function (transaction) {
+                        var tableName = sqlUnescape(tables.sqlTables[tables.n]);
+                        var sqlQuery = "SELECT sql FROM sqlite_master WHERE sql LIKE '%blob%' and tbl_name = '" +sqlEscape(tableName) + "'";
+                        
+                        transaction.executeSql(sqlQuery, [],
+                            function (transaction, results) {
+                                var tableName = sqlUnescape(tables.sqlTables[tables.n]), 
+                                    sqlStatement = "SELECT * FROM " + sqlEscape(tableName),
+                                    blobColumn = [];
+
+                                if (results.rows && results.rows.length == 1) {
+                                    var sql = results.rows.item(0).sql;
+                                    var start = sql.indexOf("(") +1;
+                                    var end = sql.indexOf(")");
+                                    var columns = sql.substring(start, end).split(",");
+                                    sqlStatement = "SELECT ";
+                                    for (var i = 0; i < columns.length; i++) {
+                                        var _colName = columns[i].trim();
+                                        var _fieldDetails = _colName.split(" ");
+                                        if (_fieldDetails[1].includes("BLOB")) {
+                                            sqlStatement += 'HEX(' + _fieldDetails[0] + ") as " + _fieldDetails[0] +  ", ";
+                                            blobColumn.push(_fieldDetails[0]);
+                                        } else{
+                                            sqlStatement += _fieldDetails[0] + ", ";
                                         }
-                                        json.data.inserts[tableName].push(_row);
-                                        statementCount++;
                                     }
+                                    sqlStatement = sqlStatement.substring(0, sqlStatement.length -2);
+                                    sqlStatement += " FROM " + sqlEscape(tableName);
                                 }
-                                tables.n++;
-                                exportTables(tables);
+                                console.log('sql statement ' + sqlStatement);
+                                transaction.executeSql(sqlStatement, [],
+                                    function (transaction, rslt) {
+                                        if (rslt.rows && !isReservedTable(tableName)) {
+                                            json.data.inserts[tableName] = [];
+                                            for (var m = 0; m < rslt.rows.length; m++) {
+                                                var dataRow = rslt.rows.item(m);
+                                                var _row = {};
+                                                for (col in dataRow) {
+                                                    if (blobColumn.includes(col)) {
+                                                        _row[col] = dataRowToJsonData("cast(X'" + dataRow[col] + "' as TEXT)");
+                                                    } else{
+                                                        _row[col] = dataRowToJsonData(dataRow[col]);
+                                                    }
+                                                }
+                                                if(opts.filterFn){
+                                                    if (opts.filterFn(tableName, _row)) {
+                                                        json.data.inserts[tableName].push(_row);
+                                                        statementCount++;
+                                                    }
+                                                } else{ 
+                                                    json.data.inserts[tableName].push(_row);
+                                                    statementCount++;
+                                                }
+                                            }
+                                        }
+                                        tables.n++;
+                                        exportTables(tables);
+                                    },
+                                    function (error) {
+                                        console.log(error)
+                                    }
+                                );
+                            
                             }
                         );
-                    });
+                    },
+                    function (error) {
+                        console.log(error)
+                    }
+                );
             }
             else if(opts.successFn){
                 opts.successFn(json, statementCount);
@@ -629,7 +738,7 @@
      * @return {string} escaped value
      */
     function sqlEscape(value){
-        if(value.match(/[_-]+/)){
+        if(value.match(/[-]+/)){
             value = '`' + value + '`';
         }
         return value;

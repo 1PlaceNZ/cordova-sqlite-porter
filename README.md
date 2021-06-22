@@ -5,6 +5,7 @@ SQLite Porter Library and Cordova/Phonegap Plugin [![Latest Stable Version](http
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
 
+- [SQLite Porter Library and Cordova/Phonegap Plugin ![Latest Stable Version](https://www.npmjs.com/package/uk.co.workingedge.cordova.plugin.sqliteporter) [![Total Downloads](https://img.shields.io/npm/dt/uk.co.workingedge.cordova.plugin.sqliteporter.svg)](https://npm-stat.com/charts.html?package=uk.co.workingedge.cordova.plugin.sqliteporter)](#sqlite-porter-library-and-cordovaphonegap-plugin--)
 - [Overview](#overview)
   - [Usage scenarios](#usage-scenarios)
 - [Installation](#installation)
@@ -14,19 +15,39 @@ SQLite Porter Library and Cordova/Phonegap Plugin [![Latest Stable Version](http
   - [Plain CommonJS library](#plain-commonjs-library)
 - [Usage](#usage)
   - [importSqlToDb()](#importsqltodb)
+    - [Parameters](#parameters)
+    - [Example usage](#example-usage)
   - [exportDbToSql()](#exportdbtosql)
+    - [Parameters](#parameters-1)
+    - [Example usage](#example-usage-1)
   - [importJsonToDb()](#importjsontodb)
+    - [Parameters](#parameters-2)
+    - [Example usage](#example-usage-2)
   - [exportDbToJson()](#exportdbtojson)
+    - [Parameters](#parameters-3)
+    - [Example usage](#example-usage-3)
   - [wipeDb()](#wipedb)
+    - [Parameters](#parameters-4)
+    - [Example usage](#example-usage-4)
 - [JSON structure](#json-structure)
+  - [`structure`](#structure)
+    - [`tables`](#tables)
+    - [`otherSQL`](#othersql)
+  - [`data`](#data)
+    - [`inserts`](#inserts)
+    - [`updates`](#updates)
+    - [`deletes`](#deletes)
   - [JSON structure examples](#json-structure-examples)
+    - [Table creation](#table-creation)
+    - [Table creation and data insertion](#table-creation-and-data-insertion)
+    - [Data updates](#data-updates)
 - [JSON import optimisations](#json-import-optimisations)
   - [Batched inserts](#batched-inserts)
   - [Delayed index creation](#delayed-index-creation)
 - [Example projects](#example-projects)
   - [HTML5 WebSQL](#html5-websql)
   - [Native SQLite](#native-sqlite)
-- [License](#license)
+- [# License](#-license)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -194,6 +215,9 @@ Exports a SQLite DB as a set of SQL statements.
     - {boolean} dataOnly - if true, only row data will be exported. Otherwise, table structure will also be exported. Defaults to false.
     - {boolean} structureOnly - if true, only table structure will be exported. Otherwise, row will also be exported. Defaults to false.
     - {array} tables - list of table names to export. If not specified, all tables will be exported.
+    - {function} filterFn - filter function to execute for every row when exporting the table row, with arguments:
+        - {string} tableName - current table the export is running against.
+        - {object} row - current table row that is currently been exported (what is returned by sqlite resultset. e.g resultSet.rows.item(i)).
 
 ### Example usage
 
@@ -337,6 +361,9 @@ Exports a SQLite DB as a JSON structure
     - {boolean} dataOnly - if true, only row data will be exported. Otherwise, table structure will also be exported. Defaults to false.
     - {boolean} structureOnly - if true, only table structure will be exported. Otherwise, row will also be exported. Defaults to false.
     - {array} tables - list of table names to export. If not specified, all tables will be exported.
+    - {function} filterFn - filter function to execute for every row when exporting the table row, with arguments:
+        - {string} tableName - current table the export is running against..
+        - {object} row - current table row that is currently been exported.
 
 ### Example usage
 
