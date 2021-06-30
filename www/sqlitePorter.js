@@ -211,6 +211,9 @@
                                         }
                                         tables.n++;
                                         exportTables(tables);
+                                    },
+                                    function (error) {
+                                        console.log(error)
                                     }
                                 );
                                 
@@ -280,8 +283,15 @@
                                     sqlTables: sqlTables,
                                     n: 0
                                 });
-                            });
+                            },
+                            function (error) {
+                                console.log(error)
+                            }
+                        );
 
+                    },
+                    function (error) {
+                        console.log(error)
                     }
                 );
             });
