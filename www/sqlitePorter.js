@@ -142,6 +142,15 @@
      *          <li>{object} row - current table row that is currently been exported. (what is returned by sqlite resultset. e.g resultSet.rows.item(i))</li>
      *      <ul>
      *  </li>
+     * <li>{javascript object} tableClauses - filter object to add where in clause to the table query: {"images" :{column:"id",value:[1,2,3,]}}
+     *      <ul>
+     *          <li>{string} table name - table column to add to where clause.</li>
+     *          <ul>
+     *               <li>{string} column - table column to add to where clause.</li>
+     *               <li>{array} value - in values.</li>
+     *          </ul>
+     *      </ul>
+     *  </li>
      * </ul> 
      */
     sqlitePorter.exportDbToSql = function (db, opts){
@@ -181,6 +190,9 @@
                                     }
                                     sqlStatement = sqlStatement.substring(0, sqlStatement.length -2);
                                     sqlStatement += " FROM " + sqlEscape(tableName);
+                                    if (opts.tableClauses && opts.tableClauses[tableName]) {
+                                        sqlStatement += createWhereFilters(opts.tableClauses[tableName])
+                                    }
                                 }
                                 console.log('sql statement ' + sqlStatement);
                                 transaction.executeSql(sqlStatement, [],
@@ -306,7 +318,7 @@
      *      <ul>
      *          <li>{object} json - exported JSON structure.</li>
      *          <li>{integer} count - number of SQL statements that exported JSON structure corresponds to.</li>
-     *      <ul>
+     *      </ul>
      *  </li>
      *  <li>{boolean} dataOnly - if true, only row data will be exported. Otherwise, table structure will also be exported. Defaults to false.</li>
      *  <li>{boolean} structureOnly - if true, only table structure will be exported. Otherwise, row will also be exported. Defaults to false.</li>
@@ -315,7 +327,16 @@
      *      <ul>
      *          <li>{string} tableName - current table the export is running against.</li>
      *          <li>{object} row - current table row that is currently been exported.</li>
+     *      </ul>
+     *  </li>
+     * <li>{javascript object} tableClauses - filter object to add where in clause to the table query: {"images" :{column:"id",value:[1,2,3,]}}
      *      <ul>
+     *          <li>{string} table name - table column to add to where clause.</li>
+     *          <ul>
+     *               <li>{string} column - table column to add to where clause.</li>
+     *               <li>{array} value - in values.</li>
+     *          </ul>
+     *      </ul>
      *  </li>
      */
     sqlitePorter.exportDbToJson = function (db, opts){
@@ -355,6 +376,9 @@
                                     }
                                     sqlStatement = sqlStatement.substring(0, sqlStatement.length -2);
                                     sqlStatement += " FROM " + sqlEscape(tableName);
+                                    if (opts.tableClauses && opts.tableClauses[tableName]) {
+                                        sqlStatement += createWhereFilters(opts.tableClauses[tableName])
+                                    }
                                 }
                                 console.log('sql statement ' + sqlStatement);
                                 transaction.executeSql(sqlStatement, [],
@@ -840,6 +864,24 @@
         }
         names = names.substring(1);
         filters = "tbl_name IN (" + names  +" ) ";
+        return filters;
+    }
+
+     /**
+     * Creates a SQL statement fragment to filter by specified tables
+     * @param {javscript object}  -  javascript object with column and value e.g. {column:"id",value:[1,2,3,]}
+     * @return {string}
+     */
+     function createWhereFilters(tableClauses){
+        var filters = "";
+        if(!tableClauses.value || tableClauses.value.length === 0) return filters;
+
+        var names = "";
+        for (var i = 0; i < tableClauses.value.length; i++) {
+            names += ",'"+tableClauses.value[i]+"'"
+        }
+        names = names.substring(1);
+        filters = " where " + tableClauses.column + " IN (" + names  +" ) ";
         return filters;
     }
 
