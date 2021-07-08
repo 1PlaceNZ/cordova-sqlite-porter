@@ -63,29 +63,35 @@
      *          <li>{integer} totalCount - total number of statements in the given SQL string.</li>
      *      <ul>
      *  </li>
+     *  <li>{string} separator - sql statement seperator
+     *      
+     *  </li>
      * </ul>
      */
     sqlitePorter.importSqlToDb = function (db, sql, opts){
         opts = opts || {};
         if(!isValidDB(db, opts)) return;
+
+        function handleError(e){
+            if(opts.errorFn){
+                opts.errorFn(e);
+            }else{
+                console.error(e.message);
+            }
+        }
+        if(opts.separator) {
+            separator = opts.separator
+        }
         db.transaction(function(tx) {
             try {
                 //Clean SQL + split into statements
                 var totalCount, currentCount;
 
-                var statements = removeComments(sql)
-                    .match(statementRegEx);;
+                var statements = removeComments(sql).split(separator);
+                // this was skipping insert statement with json content    .match(statementRegEx);
 
                 if(statements === null || (Array.isArray && !Array.isArray(statements)))
                     statements = [];
-
-                function handleError(e){
-                    if(opts.errorFn){
-                        opts.errorFn(e);
-                    }else{
-                        console.error(e.message);
-                    }
-                }
 
                 function applyStatements() {
                     if (statements.length > 0) {
@@ -107,10 +113,12 @@
                 }
 
                 // Strip empty statements
-                for(var i = 0; i < statements.length; i++){
-                    if(!statements[i]){
-                        delete statements[i];
-                    }
+                // since i'm using the delimiter we need to check for blank lines
+                var i = statements.length
+                while (i--) {
+                    if(!statements[i] || statements[i].match(/^\s+/,"")){
+                        statements.splice(i, 1);
+                    } 
                 }
 
                 currentCount = 0;
@@ -119,6 +127,8 @@
             } catch (e) {
                 handleError(e);
             }
+        }, function (error) {
+            handleError(error)
         });
     };
 
@@ -135,6 +145,7 @@
      *  </li>
      *  <li>{boolean} dataOnly - if true, only row data will be exported. Otherwise, table structure will also be exported. Defaults to false.</li>
      *  <li>{boolean} structureOnly - if true, only table structure will be exported. Otherwise, row will also be exported. Defaults to false.</li>
+     *  <li>{string} seperator - sql statement seperator</li>
      *  <li>{array} tables - list of table names to export. If not specified, all tables will be exported.</li>
      *  <li>{function} filterFn - filter function to execute for every row when exporting the table row, with arguments:
      *      <ul>
@@ -151,6 +162,7 @@
      *          </ul>
      *      </ul>
      *  </li>
+     *  <li>{string} seperator - sql statement seperator</li>
      * </ul> 
      */
     sqlitePorter.exportDbToSql = function (db, opts){
@@ -159,6 +171,9 @@
         var exportSQL = "", statementCount = 0,
             filters = createFilters(opts.tables);
 
+        if(opts.separator) {
+            separator = opts.separator
+        }
         var exportTables = function (tables) {
             if (tables.n < tables.sqlTables.length && !opts.structureOnly) {
                 db.transaction(
@@ -338,6 +353,7 @@
      *          </ul>
      *      </ul>
      *  </li>
+     *  <li>{string} seperator - sql statement seperator</li>
      */
     sqlitePorter.exportDbToJson = function (db, opts){
         opts = opts || {};
@@ -345,6 +361,9 @@
         var json = {}, statementCount = 0,
             filters = createFilters(opts.tables);
 
+        if(opts.separator) {
+            separator = opts.separator
+        }
         var exportTables = function (tables) {
             if (tables.n < tables.sqlTables.length && !opts.structureOnly) {
                 db.transaction(
@@ -517,12 +536,17 @@
      *  Defaults to 250 if not specified. Set to 1 to disable batching and perform 1 insert per SQL statement.
      *  You can tweak this to optimize performance but numbers higher than 500 may cause the app to run out of memory and crash.
      *  </li>
+     *  <li>{string} seperator - sql statement seperator</li>
      * </ul>
      */
     sqlitePorter.importJsonToDb = function (db, json, opts){
         opts = opts || {};
         if(!isValidDB(db, opts)) return;
         var mainSql = "", createIndexSql = "";
+
+        if(opts.separator) {
+            separator = opts.separator
+        }
 
         try{
             if(typeof(json) === "string"){
@@ -694,11 +718,16 @@
      *          <li>{integer} totalCount - total number of tables to drop.</li>
      *      <ul>
      *  </li>
+     *  <li>{string} seperator - sql statement seperator</li>
      * </ul>
      */
     sqlitePorter.wipeDb = function (db, opts){
         opts = opts || {};
         if(!isValidDB(db, opts)) return;
+
+        if(opts.separator) {
+            separator = opts.separator
+        }
         db.transaction(
             function (transaction) {
                 transaction.executeSql("SELECT tbl_name, type FROM sqlite_master;", [],
